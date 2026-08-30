@@ -20,14 +20,16 @@ logging.basicConfig(level=logging.INFO)
 
 # ==================== CONFIGURATION ====================
 BOT_TOKEN = "8925919416:AAF3_9eOl3mGoTG2AEZbNnMQaAxO4UtMMX4" 
-ADMIN_CHAT_ID = 5785924075
+
+# Admin IDs list (Aap baad me aur IDs add kar sakte hain)
+ADMIN_IDS = [5785924075]
 
 # MongoDB Atlas URI
 MONGO_URI = "mongodb+srv://shahbaj:shahbaj0001@cluster0.06mgf1l.mongodb.net/?appName=Cluster0"
 
 # Source Chat & Message IDs
 SOURCE_CHAT_ID = 5785924075
-WELCOME_MSG_ID = 26      # Text Welcome
+WELCOME_MSG_ID = 26      # Text Welcome (ID provided by you)
 VIDEO_MSG_ID = 30        # Tutorial Video
 AUDIO_MSG_ID = 34        # Audio Note
 APK_MSG_ID = 32          # VIP Hack File
@@ -56,7 +58,7 @@ def save_user_to_mongo(user_id, first_name, username):
     except Exception as e:
         logging.error(f"MongoDB Error: {e}")
 
-# --- KEEP-ALIVE WEB SERVER (FIXED FOR UPTIMEROBOT 501 ERROR) ---
+# --- KEEP-ALIVE WEB SERVER ---
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -77,15 +79,14 @@ def run_web_server():
 # --- WELCOME MESSAGES SENDER FUNCTION ---
 async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int, first_name: str):
     try:
-        welcome_text = (
-            f"Welcome {first_name} ❤️‍🔥\n\n"
-            f"Yrr aapne colour trading me aaj tak kitna bhi loss kia ho no problem sab recover ho jayega\n\n"
-            f"100%\n\n"
-            f"Niche ka video pura dekho or paisa chapo💸\n"
-            f"⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️"
+        # 1. Send the specific Welcome Message from SOURCE_CHAT_ID using copy_message (Replaces old text)
+        await context.bot.copy_message(
+            chat_id=user_id,
+            from_chat_id=SOURCE_CHAT_ID,
+            message_id=WELCOME_MSG_ID
         )
-        await context.bot.send_message(chat_id=user_id, text=welcome_text)
 
+        # 2. Send Video with Download and Registration Buttons
         keyboard = [
             [InlineKeyboardButton("Download Vip Hack 📥", callback_data="download_hack")],
             [InlineKeyboardButton("Registration Link 🔗", url=REGISTRATION_LINK)]
@@ -99,11 +100,26 @@ async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int,
             reply_markup=reply_markup
         )
 
+        # 3. Send Audio Note
         await context.bot.copy_message(
             chat_id=user_id,
             from_chat_id=SOURCE_CHAT_ID,
             message_id=AUDIO_MSG_ID
         )
+
+        # 4. Special Gift Message with /start trigger button
+        gift_keyboard = [
+            [InlineKeyboardButton("Claim Your Gift 🎁", callback_data="claim_gift")]
+        ]
+        gift_markup = InlineKeyboardMarkup(gift_keyboard)
+        
+        await context.bot.send_message(
+            chat_id=user_id, 
+            text="**Special Gift for you 🎊🤩**", 
+            reply_markup=gift_markup, 
+            parse_mode="Markdown"
+        )
+
     except Exception as e:
         logging.error(f"Could not send welcome content to user {user_id}: {e}")
 
@@ -124,14 +140,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
     if query.data == "download_hack":
         await context.bot.copy_message(
             chat_id=query.message.chat_id,
             from_chat_id=SOURCE_CHAT_ID,
             message_id=APK_MSG_ID
         )
+    elif query.data == "claim_gift":
+        # Simulates /start action to register user correctly and send welcome pack if needed
+        user = query.from_user
+        save_user_to_mongo(user.id, user.first_name, user.username)
+        await query.message.reply_text("✅ Gift Claimed Successfully! Bot is fully activated for you. Type /start anytime.")
 
-# --- BULLET-PROOF BROADCAST LOGIC (FOR 50k+ USERS) ---
+# --- BULLET-PROOF BROADCAST LOGIC ---
 async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
     users = list(users_collection.find({}, {"user_id": 1}))
     total_users = len(users)
@@ -169,7 +191,6 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
             failed += 1
             logging.error(f"Error sending to {u_id}: {e}")
 
-        # Telegram limit protect karne ke liye delay (Har 30 messages ke baad thoda extra rest taaki FloodWait na aaye)
         await asyncio.sleep(0.05)
         if index > 0 and index % 30 == 0:
             await asyncio.sleep(1.0)
@@ -191,20 +212,21 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
 # --- 1. DIRECT AUTOMATIC BROADCAST ---
 async def auto_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if update.effective_user.id != ADMIN_CHAT_ID:
+    if update.effective_user.id not in ADMIN_IDS:
         return
     if msg.text and msg.text.startswith("/"):
         return
-    await execute_broadcast(msg, context, ADMIN_CHAT_ID)
+    await execute_broadcast(msg, context, update.effective_user.id)
 
 # --- 2. COMMAND BASED BROADCAST ---
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if update.effective_user.id != ADMIN_CHAT_ID:
+    admin_id = update.effective_user.id
+    if admin_id not in ADMIN_IDS:
         return
 
     if msg.reply_to_message:
-        await execute_broadcast(msg.reply_to_message, context, ADMIN_CHAT_ID)
+        await execute_broadcast(msg.reply_to_message, context, admin_id)
     else:
         text_after_command = msg.text.replace("/broadcast", "").strip()
         if text_after_command:
@@ -231,7 +253,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- STATS COMMAND ---
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id == ADMIN_CHAT_ID:
+    if update.effective_user.id in ADMIN_IDS:
         total_users = users_collection.count_documents({})
         await update.message.reply_text(f"📊 **Total Users:** `{total_users}`", parse_mode="Markdown")
 
@@ -252,8 +274,8 @@ def main():
     app.add_handler(ChatJoinRequestHandler(handle_join_request))
     app.add_handler(CallbackQueryHandler(handle_button))
     
-    # Direct Message Handler
-    app.add_handler(MessageHandler(filters.Chat(ADMIN_CHAT_ID) & ~filters.COMMAND, auto_broadcast))
+    # Direct Message Handler for Admins
+    app.add_handler(MessageHandler(filters.User(ADMIN_IDS) & ~filters.COMMAND, auto_broadcast))
 
     print("Bot is running...")
     app.run_polling(close_loop=False)
