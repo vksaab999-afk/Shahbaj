@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = "8925919416:AAF3_9eOl3mGoTG2AEZbNnMQaAxO4UtMMX4" 
 
 # Admin IDs list
-ADMIN_IDS = [5785924075]
+ADMIN_IDS = [5785924075,6404913302]
 
 # MongoDB Atlas URI
 MONGO_URI = "mongodb+srv://shahbaj:shahbaj0001@cluster0.06mgf1l.mongodb.net/?appName=Cluster0"
