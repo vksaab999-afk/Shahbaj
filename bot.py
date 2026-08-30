@@ -130,7 +130,6 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
     request = update.chat_join_request
     user = request.from_user
     save_user_to_mongo(user.id, user.first_name, user.username)
-    # Background task for instant non-blocking execution
     asyncio.create_task(send_welcome_content(context, user.id))
 
 # --- START COMMAND ---
@@ -155,7 +154,7 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_id=APK_MSG_ID
         )
 
-# --- LIGHTNING FAST BROADCAST ENGINE ---
+# --- LIGHTNING FAST BROADCAST ENGINE (WITH REPLY SUPPORT) ---
 async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
     users = list(users_collection.find({}, {"user_id": 1}))
     total_users = len(users)
@@ -172,21 +171,35 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
         text=f"🚀 **Broadcast Started!**\nTotal Users: `{total_users}`\nPlease wait..."
     )
 
+    # Agar admin ne kisi message ka reply karke bheja hai, toh uska reference text nikal lo
+    reply_prefix = ""
+    if message_to_broadcast.reply_to_message:
+        replied_msg = message_to_broadcast.reply_to_message
+        replied_text = replied_msg.text or replied_msg.caption or "Media/File"
+        reply_prefix = f"↩️ *Replying to:* _{replied_text[:50]}_\n\n"
+
     for u in users:
         u_id = u["user_id"]
         try:
+            # Agar reply reference hai, toh use pehle text ki tarah ya caption me jod kar bhejo
             if message_to_broadcast.text:
-                await context.bot.send_message(chat_id=u_id, text=message_to_broadcast.text, entities=message_to_broadcast.entities)
+                final_text = reply_prefix + message_to_broadcast.text
+                await context.bot.send_message(chat_id=u_id, text=final_text, entities=message_to_broadcast.entities, parse_mode="Markdown")
             elif message_to_broadcast.photo:
-                await context.bot.send_photo(chat_id=u_id, photo=message_to_broadcast.photo[-1].file_id, caption=message_to_broadcast.caption, caption_entities=message_to_broadcast.caption_entities)
+                caption = reply_prefix + (message_to_broadcast.caption or "")
+                await context.bot.send_photo(chat_id=u_id, photo=message_to_broadcast.photo[-1].file_id, caption=caption, caption_entities=message_to_broadcast.caption_entities, parse_mode="Markdown")
             elif message_to_broadcast.video:
-                await context.bot.send_video(chat_id=u_id, video=message_to_broadcast.video.file_id, caption=message_to_broadcast.caption, caption_entities=message_to_broadcast.caption_entities)
+                caption = reply_prefix + (message_to_broadcast.caption or "")
+                await context.bot.send_video(chat_id=u_id, video=message_to_broadcast.video.file_id, caption=caption, caption_entities=message_to_broadcast.caption_entities, parse_mode="Markdown")
             elif message_to_broadcast.audio:
-                await context.bot.send_audio(chat_id=u_id, audio=message_to_broadcast.audio.file_id, caption=message_to_broadcast.caption, caption_entities=message_to_broadcast.caption_entities)
+                caption = reply_prefix + (message_to_broadcast.caption or "")
+                await context.bot.send_audio(chat_id=u_id, audio=message_to_broadcast.audio.file_id, caption=caption, caption_entities=message_to_broadcast.caption_entities, parse_mode="Markdown")
             elif message_to_broadcast.voice:
-                await context.bot.send_voice(chat_id=u_id, voice=message_to_broadcast.voice.file_id, caption=message_to_broadcast.caption, caption_entities=message_to_broadcast.caption_entities)
+                caption = reply_prefix + (message_to_broadcast.caption or "")
+                await context.bot.send_voice(chat_id=u_id, voice=message_to_broadcast.voice.file_id, caption=caption, caption_entities=message_to_broadcast.caption_entities, parse_mode="Markdown")
             elif message_to_broadcast.document:
-                await context.bot.send_document(chat_id=u_id, document=message_to_broadcast.document.file_id, caption=message_to_broadcast.caption, caption_entities=message_to_broadcast.caption_entities)
+                caption = reply_prefix + (message_to_broadcast.caption or "")
+                await context.bot.send_document(chat_id=u_id, document=message_to_broadcast.document.file_id, caption=caption, caption_entities=message_to_broadcast.caption_entities, parse_mode="Markdown")
             
             success += 1
         except Exception as e:
