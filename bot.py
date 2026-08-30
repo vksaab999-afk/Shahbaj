@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 # ==================== CONFIGURATION ====================
 BOT_TOKEN = "8925919416:AAF3_9eOl3mGoTG2AEZbNnMQaAxO4UtMMX4" 
 
-# Admin IDs list (Aap baad me aur IDs add kar sakte hain)
+# Admin IDs list
 ADMIN_IDS = [5785924075]
 
 # MongoDB Atlas URI
@@ -29,7 +29,7 @@ MONGO_URI = "mongodb+srv://shahbaj:shahbaj0001@cluster0.06mgf1l.mongodb.net/?app
 
 # Source Chat & Message IDs
 SOURCE_CHAT_ID = 5785924075
-WELCOME_MSG_ID = 26      # Text Welcome (ID provided by you)
+WELCOME_MSG_ID = 26      # Text Welcome 
 VIDEO_MSG_ID = 30        # Tutorial Video
 AUDIO_MSG_ID = 34        # Audio Note
 APK_MSG_ID = 32          # VIP Hack File
@@ -79,7 +79,7 @@ def run_web_server():
 # --- WELCOME MESSAGES SENDER FUNCTION ---
 async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int, first_name: str):
     try:
-        # 1. Send the specific Welcome Message from SOURCE_CHAT_ID using copy_message (Replaces old text)
+        # 1. Send the specific Welcome Message from SOURCE_CHAT_ID
         await context.bot.copy_message(
             chat_id=user_id,
             from_chat_id=SOURCE_CHAT_ID,
@@ -107,9 +107,14 @@ async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int,
             message_id=AUDIO_MSG_ID
         )
 
-        # 4. Special Gift Message with /start trigger button
+        # 4. Special Gift Message with a text link/command trigger or standard button
+        # Note: Telegram doesn't allow a button to automatically type a message into chat without web_app or deep linking, 
+        # but we can use start parameter deep-linking: t.me/botusername?start=gift
+        bot_info = await context.bot.get_me()
+        gift_link = f"https://t.me/{bot_info.username}?start=gift_claimed"
+        
         gift_keyboard = [
-            [InlineKeyboardButton("Claim Your Gift 🎁", callback_data="claim_gift")]
+            [InlineKeyboardButton("Claim Your Gift 🎁", url=gift_link)]
         ]
         gift_markup = InlineKeyboardMarkup(gift_keyboard)
         
@@ -130,11 +135,17 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
     save_user_to_mongo(user.id, user.first_name, user.username)
     await send_welcome_content(context, user.id, user.first_name)
 
-# --- START COMMAND ---
+# --- START COMMAND (Handles normal start and gift claim trigger) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     save_user_to_mongo(user.id, user.first_name, user.username)
-    await send_welcome_content(context, user.id, user.first_name)
+    
+    # Check if user clicked the gift button (which triggers start with arguments)
+    if context.args and "gift" in context.args[0]:
+        await update.message.reply_text("Aap spacial gift ke liye Select ho chuke ho I'd bana ke uper diye username per screenshot bhej ke apna gift lelo 🎉🔥")
+    else:
+        # Normal start / welcome flow
+        await send_welcome_content(context, user.id, user.first_name)
 
 # --- BUTTON HANDLER ---
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -147,11 +158,6 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from_chat_id=SOURCE_CHAT_ID,
             message_id=APK_MSG_ID
         )
-    elif query.data == "claim_gift":
-        # Simulates /start action to register user correctly and send welcome pack if needed
-        user = query.from_user
-        save_user_to_mongo(user.id, user.first_name, user.username)
-        await query.message.reply_text("✅ Gift Claimed Successfully! Bot is fully activated for you. Type /start anytime.")
 
 # --- BULLET-PROOF BROADCAST LOGIC ---
 async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
@@ -247,7 +253,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if index > 0 and index % 30 == 0:
                     await asyncio.sleep(1.0)
                     
-            await progress_msg.edit_text(f"✅ **Broadcast Completed!**\n\n👥 Total: `{total_users}`\n🚀 Sent: `{success}`\n❌ Failed: `{failed}`", parse_mode="Markdown")
+            await progress_msg.edit_text(f"✅ **Broadcast Completed!**\n\n👥 Total: `{total_users}`\n🚀 Sent: `{success}`\n❌ Failed: `{failed}`", parse_page="Markdown")
         else:
             await msg.reply_text("⚠️ Kripya message ke sath /broadcast likhein ya kisi message par reply karke /broadcast bhejein.")
 
@@ -278,7 +284,7 @@ def main():
     app.add_handler(MessageHandler(filters.User(ADMIN_IDS) & ~filters.COMMAND, auto_broadcast))
 
     print("Bot is running...")
-    app.run_polling(close_loop=False)
+    app.run_polling(drop_pending_updates=True, close_loop=False)
 
 if __name__ == "__main__":
     main()
