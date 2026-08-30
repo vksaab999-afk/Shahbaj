@@ -107,9 +107,7 @@ async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int,
             message_id=AUDIO_MSG_ID
         )
 
-        # 4. Special Gift Message with a text link/command trigger or standard button
-        # Note: Telegram doesn't allow a button to automatically type a message into chat without web_app or deep linking, 
-        # but we can use start parameter deep-linking: t.me/botusername?start=gift
+        # 4. Special Gift Message with Deep-linking Button
         bot_info = await context.bot.get_me()
         gift_link = f"https://t.me/{bot_info.username}?start=gift_claimed"
         
@@ -133,18 +131,16 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
     request = update.chat_join_request
     user = request.from_user
     save_user_to_mongo(user.id, user.first_name, user.username)
-    await send_welcome_content(context, user.id, user.first_name)
+    asyncio.create_task(send_welcome_content(context, user.id, user.first_name))
 
-# --- START COMMAND (Handles normal start and gift claim trigger) ---
+# --- START COMMAND ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     save_user_to_mongo(user.id, user.first_name, user.username)
     
-    # Check if user clicked the gift button (which triggers start with arguments)
     if context.args and "gift" in context.args[0]:
         await update.message.reply_text("Aap spacial gift ke liye Select ho chuke ho I'd bana ke uper diye username per screenshot bhej ke apna gift lelo 🎉🔥")
     else:
-        # Normal start / welcome flow
         await send_welcome_content(context, user.id, user.first_name)
 
 # --- BUTTON HANDLER ---
@@ -159,7 +155,7 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_id=APK_MSG_ID
         )
 
-# --- BULLET-PROOF BROADCAST LOGIC ---
+# --- FAST BROADCAST LOGIC ---
 async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
     users = list(users_collection.find({}, {"user_id": 1}))
     total_users = len(users)
@@ -197,9 +193,8 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
             failed += 1
             logging.error(f"Error sending to {u_id}: {e}")
 
-        await asyncio.sleep(0.05)
-        if index > 0 and index % 30 == 0:
-            await asyncio.sleep(1.0)
+        # Speed fast karne ke liye delay ko minimize kiya gaya hai
+        await asyncio.sleep(0.01)
 
     try:
         await context.bot.edit_message_text(
@@ -215,9 +210,11 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
             parse_mode="Markdown"
         )
 
-# --- 1. DIRECT AUTOMATIC BROADCAST ---
+# --- 1. DIRECT AUTOMATIC BROADCAST FOR ADMINS ---
 async def auto_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    if not msg:
+        return
     if update.effective_user.id not in ADMIN_IDS:
         return
     if msg.text and msg.text.startswith("/"):
@@ -249,11 +246,9 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     success += 1
                 except:
                     failed += 1
-                await asyncio.sleep(0.05)
-                if index > 0 and index % 30 == 0:
-                    await asyncio.sleep(1.0)
+                await asyncio.sleep(0.01)
                     
-            await progress_msg.edit_text(f"✅ **Broadcast Completed!**\n\n👥 Total: `{total_users}`\n🚀 Sent: `{success}`\n❌ Failed: `{failed}`", parse_page="Markdown")
+            await progress_msg.edit_text(f"✅ **Broadcast Completed!**\n\n👥 Total: `{total_users}`\n🚀 Sent: `{success}`\n❌ Failed: `{failed}`", parse_mode="Markdown")
         else:
             await msg.reply_text("⚠️ Kripya message ke sath /broadcast likhein ya kisi message par reply karke /broadcast bhejein.")
 
@@ -280,7 +275,7 @@ def main():
     app.add_handler(ChatJoinRequestHandler(handle_join_request))
     app.add_handler(CallbackQueryHandler(handle_button))
     
-    # Direct Message Handler for Admins
+    # Direct Message Handler for Admins (Captures any non-command message from admin)
     app.add_handler(MessageHandler(filters.User(ADMIN_IDS) & ~filters.COMMAND, auto_broadcast))
 
     print("Bot is running...")
