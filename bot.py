@@ -164,9 +164,6 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
         await context.bot.send_message(chat_id=admin_chat_id, text="⚠️ Database me koi user nahi hai!")
         return
 
-    success = 0
-    failed = 0
-
     progress_msg = await context.bot.send_message(
         chat_id=admin_chat_id, 
         text=f"🚀 **Broadcast Started!**\nTotal Users: `{total_users}`\nPlease wait..."
@@ -174,6 +171,8 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
 
     for u in users:
         u_id = u["user_id"]
+        if u_id in ADMIN_IDS:
+            continue  # Admin ko khud message nahi jayega
         try:
             if message_to_broadcast.text:
                 await context.bot.send_message(chat_id=u_id, text=message_to_broadcast.text, entities=message_to_broadcast.entities)
@@ -187,23 +186,20 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
                 await context.bot.send_voice(chat_id=u_id, voice=message_to_broadcast.voice.file_id, caption=message_to_broadcast.caption, caption_entities=message_to_broadcast.caption_entities)
             elif message_to_broadcast.document:
                 await context.bot.send_document(chat_id=u_id, document=message_to_broadcast.document.file_id, caption=message_to_broadcast.caption, caption_entities=message_to_broadcast.caption_entities)
-            
-            success += 1
         except Exception as e:
-            failed += 1
             logging.error(f"Broadcast error for {u_id}: {e}")
 
     try:
         await context.bot.edit_message_text(
             chat_id=admin_chat_id, 
             message_id=progress_msg.message_id,
-            text=f"✅ **Broadcast Completed!**\n\n👥 Total: `{total_users}`\n🚀 Sent: `{success}`\n❌ Failed: `{failed}`", 
+            text="✅ **Broadcast Completed!**", 
             parse_mode="Markdown"
         )
     except:
         await context.bot.send_message(
             chat_id=admin_chat_id, 
-            text=f"✅ **Broadcast Completed!**\n\n👥 Total: `{total_users}`\n🚀 Sent: `{success}`\n❌ Failed: `{failed}`", 
+            text="✅ **Broadcast Completed!**", 
             parse_mode="Markdown"
         )
 
@@ -232,19 +228,19 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text_after_command:
             users = list(users_collection.find({}, {"user_id": 1}))
             total_users = len(users)
-            success = 0
-            failed = 0
             
             progress_msg = await msg.reply_text(f"🚀 Broadcast started for {total_users} users...")
             
             for u in users:
+                u_id = u["user_id"]
+                if u_id in ADMIN_IDS:
+                    continue
                 try:
-                    await context.bot.send_message(chat_id=u["user_id"], text=text_after_command)
-                    success += 1
+                    await context.bot.send_message(chat_id=u_id, text=text_after_command)
                 except:
-                    failed += 1
+                    pass
                     
-            await progress_msg.edit_text(f"✅ **Broadcast Completed!**\n\n👥 Total: `{total_users}`\n🚀 Sent: `{success}`\n❌ Failed: `{failed}`", parse_mode="Markdown")
+            await progress_msg.edit_text("✅ **Broadcast Completed!**", parse_mode="Markdown")
         else:
             await msg.reply_text("⚠️ Kripya message ke sath /broadcast likhein ya kisi message par reply karke /broadcast bhejein.")
 
