@@ -76,17 +76,17 @@ def run_web_server():
     server = ThreadingHTTPServer(("0.0.0.0", port), SimpleHTTPRequestHandler)
     server.serve_forever()
 
-# --- WELCOME MESSAGES SENDER FUNCTION ---
-async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int, first_name: str):
+# --- INSTANT WELCOME SENDER FUNCTION ---
+async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int):
     try:
-        # 1. Send the specific Welcome Message from SOURCE_CHAT_ID
+        # 1. Send Welcome Text Message
         await context.bot.copy_message(
             chat_id=user_id,
             from_chat_id=SOURCE_CHAT_ID,
             message_id=WELCOME_MSG_ID
         )
 
-        # 2. Send Video with Download and Registration Buttons
+        # 2. Send Video with Buttons
         keyboard = [
             [InlineKeyboardButton("Download Vip Hack 📥", callback_data="download_hack")],
             [InlineKeyboardButton("Registration Link 🔗", url=REGISTRATION_LINK)]
@@ -107,7 +107,7 @@ async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int,
             message_id=AUDIO_MSG_ID
         )
 
-        # 4. Special Gift Message with Deep-linking Button
+        # 4. Special Gift Button with Deep-link
         bot_info = await context.bot.get_me()
         gift_link = f"https://t.me/{bot_info.username}?start=gift_claimed"
         
@@ -122,16 +122,16 @@ async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int,
             reply_markup=gift_markup, 
             parse_mode="Markdown"
         )
-
     except Exception as e:
-        logging.error(f"Could not send welcome content to user {user_id}: {e}")
+        logging.error(f"Error sending welcome content to {user_id}: {e}")
 
-# --- JOIN REQUEST HANDLER ---
+# --- JOIN REQUEST HANDLER (INSTANT) ---
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     request = update.chat_join_request
     user = request.from_user
     save_user_to_mongo(user.id, user.first_name, user.username)
-    asyncio.create_task(send_welcome_content(context, user.id, user.first_name))
+    # Background task for instant non-blocking execution
+    asyncio.create_task(send_welcome_content(context, user.id))
 
 # --- START COMMAND ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -141,7 +141,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args and "gift" in context.args[0]:
         await update.message.reply_text("Aap spacial gift ke liye Select ho chuke ho I'd bana ke uper diye username per screenshot bhej ke apna gift lelo 🎉🔥")
     else:
-        await send_welcome_content(context, user.id, user.first_name)
+        asyncio.create_task(send_welcome_content(context, user.id))
 
 # --- BUTTON HANDLER ---
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -155,7 +155,7 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_id=APK_MSG_ID
         )
 
-# --- FAST BROADCAST LOGIC ---
+# --- LIGHTNING FAST BROADCAST ENGINE ---
 async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
     users = list(users_collection.find({}, {"user_id": 1}))
     total_users = len(users)
@@ -172,7 +172,7 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
         text=f"🚀 **Broadcast Started!**\nTotal Users: `{total_users}`\nPlease wait..."
     )
 
-    for index, u in enumerate(users):
+    for u in users:
         u_id = u["user_id"]
         try:
             if message_to_broadcast.text:
@@ -191,10 +191,7 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
             success += 1
         except Exception as e:
             failed += 1
-            logging.error(f"Error sending to {u_id}: {e}")
-
-        # Speed fast karne ke liye delay ko minimize kiya gaya hai
-        await asyncio.sleep(0.01)
+            logging.error(f"Broadcast error for {u_id}: {e}")
 
     try:
         await context.bot.edit_message_text(
@@ -210,7 +207,7 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
             parse_mode="Markdown"
         )
 
-# --- 1. DIRECT AUTOMATIC BROADCAST FOR ADMINS ---
+# --- AUTO BROADCAST FOR ADMINS ---
 async def auto_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg:
@@ -221,7 +218,7 @@ async def auto_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await execute_broadcast(msg, context, update.effective_user.id)
 
-# --- 2. COMMAND BASED BROADCAST ---
+# --- COMMAND BASED BROADCAST ---
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     admin_id = update.effective_user.id
@@ -240,13 +237,12 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             progress_msg = await msg.reply_text(f"🚀 Broadcast started for {total_users} users...")
             
-            for index, u in enumerate(users):
+            for u in users:
                 try:
                     await context.bot.send_message(chat_id=u["user_id"], text=text_after_command)
                     success += 1
                 except:
                     failed += 1
-                await asyncio.sleep(0.01)
                     
             await progress_msg.edit_text(f"✅ **Broadcast Completed!**\n\n👥 Total: `{total_users}`\n🚀 Sent: `{success}`\n❌ Failed: `{failed}`", parse_mode="Markdown")
         else:
@@ -275,7 +271,7 @@ def main():
     app.add_handler(ChatJoinRequestHandler(handle_join_request))
     app.add_handler(CallbackQueryHandler(handle_button))
     
-    # Direct Message Handler for Admins (Captures any non-command message from admin)
+    # Direct Message Handler for Admins
     app.add_handler(MessageHandler(filters.User(ADMIN_IDS) & ~filters.COMMAND, auto_broadcast))
 
     print("Bot is running...")
