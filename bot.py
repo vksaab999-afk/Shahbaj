@@ -22,14 +22,14 @@ logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = "8925919416:AAF3_9eOl3mGoTG2AEZbNnMQaAxO4UtMMX4" 
 
 # Admin IDs list
-ADMIN_IDS = [5785924075,6404913302]
+ADMIN_IDS = [5785924075]
 
 # MongoDB Atlas URI
 MONGO_URI = "mongodb+srv://shahbaj:shahbaj0001@cluster0.06mgf1l.mongodb.net/?appName=Cluster0"
 
 # Source Chat & Message IDs
 SOURCE_CHAT_ID = 5785924075
-WELCOME_MSG_ID = 26      # Text Welcome 
+WELCOME_MSG_ID = 26      # Original Text Welcome Message ID
 VIDEO_MSG_ID = 30        # Tutorial Video
 AUDIO_MSG_ID = 34        # Audio Note
 APK_MSG_ID = 32          # VIP Hack File
@@ -77,16 +77,28 @@ def run_web_server():
     server.serve_forever()
 
 # --- INSTANT WELCOME SENDER FUNCTION ---
-async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int):
+async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int, first_name: str = "User"):
     try:
-        # 1. Send Welcome Text Message
+        safe_name = first_name if first_name else "User"
+        
+        # 1. Custom Name Welcome Message (Sabse Pehle)
+        custom_welcome_text = (
+            f"👋🏻 𝐖𝐄𝐋𝐂𝐎𝐌𝐄 **{safe_name}** 👑❤️𝐓𝐎 𝗢𝗨𝗥 - 𝐏𝐑𝐈𝐕𝐀𝐓𝐄 𝐇𝐀𝐂𝐊 SERVER🤑\n\n"
+        )
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=custom_welcome_text,
+            parse_mode="Markdown"
+        )
+
+        # 2. Original Welcome Message ID (Wapas jod diya hai)
         await context.bot.copy_message(
             chat_id=user_id,
             from_chat_id=SOURCE_CHAT_ID,
             message_id=WELCOME_MSG_ID
         )
 
-        # 2. Send Video with Buttons
+        # 3. Send Video with Buttons
         keyboard = [
             [InlineKeyboardButton("Download Vip Hack 📥", callback_data="download_hack")],
             [InlineKeyboardButton("Registration Link 🔗", url=REGISTRATION_LINK)]
@@ -100,14 +112,14 @@ async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int)
             reply_markup=reply_markup
         )
 
-        # 3. Send Audio Note
+        # 4. Send Audio Note
         await context.bot.copy_message(
             chat_id=user_id,
             from_chat_id=SOURCE_CHAT_ID,
             message_id=AUDIO_MSG_ID
         )
 
-        # 4. Special Gift Button with Deep-link
+        # 5. Special Gift Button with Deep-link
         bot_info = await context.bot.get_me()
         gift_link = f"https://t.me/{bot_info.username}?start=gift_claimed"
         
@@ -130,8 +142,7 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
     request = update.chat_join_request
     user = request.from_user
     save_user_to_mongo(user.id, user.first_name, user.username)
-    # Background task for instant non-blocking execution
-    asyncio.create_task(send_welcome_content(context, user.id))
+    asyncio.create_task(send_welcome_content(context, user.id, user.first_name))
 
 # --- START COMMAND ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -141,7 +152,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args and "gift" in context.args[0]:
         await update.message.reply_text("Aap spacial gift ke liye Select ho chuke ho I'd bana ke uper diye username per screenshot bhej ke apna gift lelo 🎉🔥")
     else:
-        asyncio.create_task(send_welcome_content(context, user.id))
+        asyncio.create_task(send_welcome_content(context, user.id, user.first_name))
 
 # --- BUTTON HANDLER ---
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -172,7 +183,7 @@ async def execute_broadcast(message_to_broadcast, context, admin_chat_id):
     for u in users:
         u_id = u["user_id"]
         if u_id in ADMIN_IDS:
-            continue  # Admin ko khud message nahi jayega
+            continue  
         try:
             if message_to_broadcast.text:
                 await context.bot.send_message(chat_id=u_id, text=message_to_broadcast.text, entities=message_to_broadcast.entities)
