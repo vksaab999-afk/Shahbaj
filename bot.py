@@ -83,7 +83,7 @@ async def send_welcome_content(context: ContextTypes.DEFAULT_TYPE, user_id: int,
         
         # 1. Custom Name Welcome Message (Sabse Pehle)
         custom_welcome_text = (
-            f"👋🏻 𝐖𝐄𝐋𝐂𝐎𝐌𝐄 **{safe_name}** 👑❤️𝐓𝐎 𝗢𝗨𝗥 - 𝐏𝐑𝐈𝐕𝐀𝐓𝐄 𝐇𝐀𝐂𝐊 SERVER🤑\n\n"
+            f"👋🏻 𝐖𝐄𝐋𝐂𝐎𝐌𝐄 **{safe_name}** 👑❤️\n\n"
         )
         await context.bot.send_message(
             chat_id=user_id,
